@@ -1,56 +1,80 @@
 /**
- * WorktreePanel: the `conversation.input.dock` entry — a one-row action bar
- * above the composer. Each button copies the matching `/worktree ...`
- * command to the clipboard; the user pastes it into the composer and sends
- * (方案 A without depending on ui-conversation's internal input machine —
- * external packages do not receive its SessionStandardProps inject).
+ * WorktreePanel: the `conversation.input.dock` entry — a compact action bar
+ * above the composer implementing the Qoder-style worktree environment flow:
+ *
+ * - Buttons execute `/worktree ...` commands directly on the current session
+ *   (`ISession.command`), not clipboard copies.
+ * - 「新建」collects a name then runs `/worktree create <name>`; afterwards it
+ *   resolves the created worktree's workspace and opens a fresh session there
+ *   (`workspaces.startSession`) — the user lands in the isolated checkout and
+ *   keeps typing; the composer content naturally goes to that session.
+ *
+ * The sessions/workspaces services are injected through the plugin's apply;
+ * the components receive plain callbacks (AGENTS.md client discipline).
  */
 import { useState } from 'react'
 import type { ReactNode } from 'react'
+import type { ISession } from '@deepseek-ai/dsh-client-runtime/client'
 import type { WorktreeKey } from './locales.ts'
 import css from './WorktreePanel.module.css'
 
-interface ActionDef {
-  key: keyof WorktreeKey
-  command: string
-  /** Placeholder suffix for name-requiring commands; kept empty for list/prune. */
-  needsArg: boolean
+/** Injected callbacks (from the plugin apply closure — components never see ctx). */
+export interface WorktreePanelInjected {
+  /** Resolve the current session face (or undefined when absent). */
+  currentSession(): ISession | undefined
+  /** After `/worktree create <name>` succeeded, open a session in the new checkout. */
+  openWorktreeWorkspace(name: string): Promise<void>
 }
 
-const ACTIONS: readonly ActionDef[] = [
-  { key: 'create', command: '/worktree create ', needsArg: true },
-  { key: 'list', command: '/worktree list', needsArg: false },
-  { key: 'status', command: '/worktree status ', needsArg: true },
-  { key: 'bringBack', command: '/worktree bring-back ', needsArg: true },
-  { key: 'remove', command: '/worktree remove ', needsArg: true },
-  { key: 'prune', command: '/worktree prune', needsArg: false },
-]
-
-/** WorktreePanel receives no framework-injected props (external package). */
-export interface WorktreePanelProps {
+export interface WorktreePanelProps extends WorktreePanelInjected {
   /** Locale-bound strings for the action labels. */
   t: (key: keyof WorktreeKey) => string
 }
 
-/** Copy a command to the clipboard; falls back silently when unavailable. */
-async function copyCommand(command: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(command)
-    return true
-  } catch {
-    return false
-  }
+/** Run one slash command on the current session; returns false on missing session or unhandled command. */
+async function runCommand(injected: WorktreePanelInjected, line: string): Promise<boolean> {
+  const session = injected.currentSession()
+  if (session === undefined) return false
+  const result = await session.command(line)
+  if (!result.ok) return false
+  return result.value.matched
 }
 
-export function WorktreePanel({ t }: WorktreePanelProps): ReactNode {
-  const [copied, setCopied] = useState<keyof WorktreeKey | null>(null)
+/** Execute a command, then open the worktree workspace session for create actions. */
+async function createAndOpen(injected: WorktreePanelInjected, name: string): Promise<void> {
+  const matched = await runCommand(injected, `/worktree create ${name}`)
+  if (!matched) throw new Error(`create command not matched: /worktree create ${name}`)
+  await injected.openWorktreeWorkspace(name)
+}
 
-  const handleAction = (action: ActionDef): void => {
-    void copyCommand(action.command).then(ok => {
-      if (ok) {
-        setCopied(action.key)
-        setTimeout(() => setCopied(null), 1200)
-      }
+export function WorktreePanel(props: WorktreePanelProps): ReactNode {
+  const { t } = props
+  const [creating, setCreating] = useState(false)
+  const [name, setName] = useState('')
+  const [busy, setBusy] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+
+  const quickActions: { key: keyof WorktreeKey; line: string }[] = [
+    { key: 'list', line: '/worktree list' },
+    { key: 'status', line: '/worktree status' },
+    { key: 'prune', line: '/worktree prune' },
+  ]
+
+  const runQuick = (line: string): void => {
+    void runCommand(props, line).then(ok => {
+      if (!ok) setNotice(t('fail'))
+      setTimeout(() => setNotice(null), 1500)
+    })
+  }
+
+  const submitCreate = (): void => {
+    const trimmed = name.trim()
+    if (trimmed === '' || busy !== null) return
+    setBusy('create')
+    void createAndOpen(props, trimmed).finally(() => {
+      setBusy(null)
+      setName('')
+      setCreating(false)
     })
   }
 
@@ -58,18 +82,35 @@ export function WorktreePanel({ t }: WorktreePanelProps): ReactNode {
     <div className={css.root} data-testid="worktree-panel" aria-label={t('panelTitle')}>
       <span className={css.title}>{t('panelTitle')}</span>
       <div className={css.actions}>
-        {ACTIONS.map(action => (
-          <button
-            key={action.key}
-            type="button"
-            className={css.action}
-            onClick={() => handleAction(action)}
-            title={action.command.trim()}
-          >
-            {copied === action.key ? '✓' : t(action.key)}
-          </button>
-        ))}
+        {creating ? (
+          <span className={css.createRow}>
+            <input
+              className={css.nameInput}
+              value={name}
+              onChange={e => setName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') submitCreate() }}
+              placeholder={t('createPlaceholder')}
+              autoFocus
+            />
+            <button type="button" className={css.action} disabled={busy !== null} onClick={submitCreate}>
+              {busy === 'create' ? '…' : t('confirm')}
+            </button>
+            <button type="button" className={css.action} onClick={() => { setCreating(false); setName('') }}>
+              {t('cancel')}
+            </button>
+          </span>
+        ) : (
+          <>
+            <button type="button" className={css.action} onClick={() => setCreating(true)}>{t('create')}</button>
+            {quickActions.map(a => (
+              <button key={a.key} type="button" className={css.action} onClick={() => runQuick(a.line)}>
+                {t(a.key)}
+              </button>
+            ))}
+          </>
+        )}
       </div>
+      {notice !== null && <span className={css.notice}>{notice}</span>}
     </div>
   )
 }

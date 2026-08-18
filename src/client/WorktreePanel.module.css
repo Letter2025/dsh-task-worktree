@@ -1,36 +1,66 @@
 .root {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+  gap: 10px;
+  padding: 4px 10px;
   border-radius: 8px;
-  background: var(--dsh-worktree-panel-bg, rgba(127, 127, 127, 0.08));
+  background: rgba(127, 127, 127, 0.06);
   font-size: 12px;
+  border: 1px solid rgba(127, 127, 127, 0.14);
 }
 
 .title {
   font-weight: 600;
-  margin-right: 4px;
   white-space: nowrap;
+  opacity: 0.75;
 }
 
 .actions {
   display: flex;
-  gap: 6px;
+  align-items: center;
+  gap: 4px;
   flex-wrap: wrap;
 }
 
 .action {
-  border: 1px solid rgba(127, 127, 127, 0.3);
+  border: none;
   border-radius: 6px;
   background: transparent;
   color: inherit;
   font: inherit;
-  padding: 2px 8px;
+  padding: 3px 10px;
   cursor: pointer;
   white-space: nowrap;
+  opacity: 0.85;
 }
 
 .action:hover {
   background: rgba(127, 127, 127, 0.12);
+  opacity: 1;
+}
+
+.action:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.createRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nameInput {
+  font: inherit;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(127, 127, 127, 0.3);
+  background: transparent;
+  color: inherit;
+  min-width: 180px;
+}
+
+.notice {
+  opacity: 0.7;
+  white-space: nowrap;
 }
