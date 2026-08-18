@@ -1,7 +1,5 @@
 # dsh-task-worktree
 
-[![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
-
 **为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 提供完整的 Git worktree 能力。**
 
 [English](README.md) | 中文
