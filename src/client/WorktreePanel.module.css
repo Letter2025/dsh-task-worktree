@@ -1,0 +1,36 @@
+.root {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--dsh-worktree-panel-bg, rgba(127, 127, 127, 0.08));
+  font-size: 12px;
+}
+
+.title {
+  font-weight: 600;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.action {
+  border: 1px solid rgba(127, 127, 127, 0.3);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 2px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.action:hover {
+  background: rgba(127, 127, 127, 0.12);
+}
