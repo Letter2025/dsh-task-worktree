@@ -41,14 +41,22 @@ try {
   await run(['commit', '-m', 'initial'], repo)
   const initialHead = await run(['rev-parse', 'HEAD'], repo)
 
-  console.log('create (branch-based)')
+  console.log('create (branch-based, slashed names)')
   const created = await manager.create({ name: 'feature-auth', cwd: repo, createdBy: 'src-1' })
   check('repoRoot is the repo', path.basename(created.repoRoot) === 'repo')
-  check('entry has branch worktree-feature-auth', created.worktree.branch === 'worktree-feature-auth')
-  check('entry path under .dsh-worktrees', created.worktree.path.includes(`${path.sep}.dsh-worktrees${path.sep}`))
+  check('branch equals name', created.worktree.branch === 'feature-auth')
+  check('path under .dsh-worktrees/worktree namespace', created.worktree.path.includes(`${path.sep}.dsh-worktrees${path.sep}worktree${path.sep}`), created.worktree.path)
   check('worktree checkout exists at base', (await run(['rev-parse', 'HEAD'], created.worktree.path)) === initialHead)
-  const branchList = await run(['branch', '--list', 'worktree-feature-auth'], repo)
-  check('branch created in source repo', branchList.includes('worktree-feature-auth'))
+  const branchList = await run(['branch', '--list', 'feature-auth'], repo)
+  check('branch created in source repo', branchList.includes('feature-auth'))
+
+  const slashed = await manager.create({ name: 'refactor/logging', cwd: repo, createdBy: 'src-1' })
+  check('slashed name becomes nested path', slashed.worktree.path.includes(`${path.sep}.dsh-worktrees${path.sep}worktree${path.sep}refactor${path.sep}logging`), slashed.worktree.path)
+  check('slashed name becomes slashed branch', slashed.worktree.branch === 'refactor/logging')
+  const slashBranch = await run(['branch', '--list', 'refactor/logging'], repo)
+  check('slashed branch created', slashBranch.includes('refactor/logging'))
+  await run(['worktree', 'remove', '--force', slashed.worktree.path], repo)
+
   // create auto-appends .dsh-worktrees/ to .gitignore; commit it so the main
   // workspace is clean again for bring-back checks.
   await run(['add', '.gitignore'], repo)
@@ -56,10 +64,10 @@ try {
 
   console.log('list / status')
   let listed = await manager.list(repo)
-  check('list shows one entry', listed.worktrees.length === 1 && listed.worktrees[0].name === 'feature-auth')
+  check('list shows the created worktree', listed.worktrees.some((w) => w.name === 'feature-auth' && w.exists === true))
   check('list entry exists with head', listed.worktrees[0].exists === true && listed.worktrees[0].head === initialHead)
   let st = await manager.status({ name: 'feature-auth', cwd: repo })
-  check('status shows branch + clean', st.worktree.branch === 'worktree-feature-auth' && st.worktree.dirty === false)
+  check('status shows branch + clean', st.worktree.branch === 'feature-auth' && st.worktree.dirty === false)
   let stByCwd = await manager.status({ cwd: created.worktree.path })
   check('status by cwd finds the worktree', stByCwd.worktree.name === 'feature-auth')
 
@@ -114,7 +122,8 @@ try {
   const pruned = await manager.prune({ cwd: repo })
   check('prune drops stale record', pruned.pruned.includes('feature-carry'))
   const finalList = await manager.list(repo)
-  check('only feature-ui remains', finalList.worktrees.length === 1 && finalList.worktrees[0].name === 'feature-ui')
+  check('prune also drops the bare-removed refactor/logging', !finalList.worktrees.some((w) => w.name === 'refactor/logging'))
+  check('feature-ui remains after prune', finalList.worktrees.some((w) => w.name === 'feature-ui'))
 
   console.log('error paths')
   let dup = false

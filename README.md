@@ -36,7 +36,7 @@ Local session                                Worktree session (open <.dsh-worktr
         └─ /worktree remove <name>       → delete the worktree + branch
 ```
 
-1. Ask the agent to isolate a task: **"用 worktree 隔离干活，任务叫 xxx"** — the model calls `worktree_create`, which creates the checkout and branch (`worktree-<name>`) and registers it as a workspace.
+1. Ask the agent to isolate a task: **"用 worktree 隔离干活，任务叫 xxx"** — the model calls `worktree_create`; the name is both the branch and the relative path (slashes allowed, e.g. `refactor/logging` → `.dsh-worktrees/worktree/refactor/logging`) and the worktree is registered as a workspace.
 2. Open the returned path as a workspace in the GUI — that session's cwd **is** the worktree, so every edit stays inside it; subagents inherit the isolation.
 3. When done, go back to the local session and choose:
    - **`/worktree bring-back <name>`** — commit any worktree changes onto its branch, then merge the branch back into your current main branch (Qoder's Move to local);
@@ -56,7 +56,7 @@ Requires: DeepSeek Harness `0.1.0-rc.7` package line, Git 2.31+, Node 20+.
 
 | Tool | Purpose |
 | --- | --- |
-| `worktree_create {name, baseCommit?, includeUncommitted?}` | Create a task worktree (branch `worktree-<name>`); optionally carry uncommitted main-workspace changes in |
+| `worktree_create {name, baseCommit?, includeUncommitted?}` | Create a task worktree (name = branch and relative path, slashes allowed); optionally carry uncommitted main-workspace changes in |
 | `worktree_list` | List the repository's managed worktrees (state / dirty / branch) |
 | `worktree_status {name?}` | Status of one worktree, or the one the current session is inside |
 

@@ -35,7 +35,7 @@
        └─ /worktree remove <名称>       → 删除 worktree 与分支
 ```
 
-1. 让 agent 隔离一个任务：**"用 worktree 隔离干活，任务叫 xxx"** —— 模型调用 `worktree_create`，创建 checkout 与分支（`worktree-<名称>`）并注册成工作区。
+1. 让 agent 隔离一个任务：**"用 worktree 隔离干活，任务叫 xxx"** —— 模型调用 `worktree_create`，name 同时作分支名与路径（支持斜杠，如 `refactor/logging` → `.dsh-worktrees/worktree/refactor/logging`）并注册成工作区。
 2. 在 GUI 中打开返回的路径作为工作区——该会话的 cwd **就是** worktree，所有改动都落在隔离区；子代理自动继承隔离。
 3. 干完后回到本地会话，选择收尾方式：
    - **`/worktree bring-back <名称>`** —— 先把 worktree 内改动提交到它的分支，再把分支合并回当前主分支（Qoder 的 Move to local）；
@@ -55,7 +55,7 @@ dsh plugin --profile web add dsh-task-worktree
 
 | 工具 | 作用 |
 | --- | --- |
-| `worktree_create {name, baseCommit?, includeUncommitted?}` | 创建任务 worktree（分支 `worktree-<名称>`）；可选把主工作区未提交改动带进去 |
+| `worktree_create {name, baseCommit?, includeUncommitted?}` | 创建任务 worktree（name=分支名与相对路径，支持斜杠分层）；可选把主工作区未提交改动带进去 |
 | `worktree_list` | 列出当前仓库所有受管理 worktree（状态 / dirty / 分支） |
 | `worktree_status {name?}` | 查看单个 worktree 或当前会话所在 worktree 的状态 |
 
