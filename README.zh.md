@@ -1,0 +1,95 @@
+# dsh-task-worktree
+
+[![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
+
+**为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 提供完整的 Git worktree 能力。**
+
+[English](README.md) | 中文
+
+一个社区插件：给 DSH 带来 Qoder / Codex / Claude Code 同款的**任务级 worktree 工作流**。每个任务拥有一个**独立的 `git worktree` checkout**（独立分支），记录在 per-repo manifest 中，**跨会话、跨重启永久保存**。主工作区保持干净；worktree 注册为 DSH 工作区，可从 GUI 打开、在隔离环境中干活，干完后**带回到主目录**（Move to local）或**直接提交**在 worktree 分支上——一切收尾都由你（人）显式决定。
+
+设计参考：Qoder 的 `Worktree` 执行环境、Codex 的 `codex worktree create --permanent`、Claude Code 的 `--worktree` 会话，并适配 DSH 的会话/工作区模型。
+
+## 设计对照
+
+| 本插件概念 | Qoder | Codex | Claude Code |
+| --- | --- | --- | --- |
+| 任务级隔离 checkout | Worktree 执行环境 | `codex worktree create --permanent` | `claude --worktree <名称>` |
+| worktree 位于 `<仓库>/.dsh-worktrees/` | 后台 worktree checkout | `.codex/worktrees/` | `.claude/worktrees/` |
+| 注册表跨重启持久 | 按会话 | 全局索引 | 会话绑定 |
+| 每任务独立分支 | 分支选择器 | — | `worktree-<名称>` |
+| 从 GUI 打开（注册为 DSH 工作区） | 面板选择器 | `codex worktree open` | 直接进入 worktree |
+| 把改动带回主目录 | Move to local | — | 退出/清理询问 |
+| 直接在 worktree 分支提交 | Review & commit 面板 | worktree 会话内提交 | worktree 内提交 |
+| 携带主目录未提交改动 | Include uncommitted changes | — | `.worktreeinclude` |
+| 自动忽略 worktree 目录 | — | — | `.gitignore` 建议 |
+
+## 工作流
+
+```
+本地会话                              worktree 会话（打开 .dsh-worktrees/<名称> 作为工作区）
+  │ agent 调 worktree_create              │
+  ├───────────────────────────────────────►│ 独立 checkout，正常开发与提交
+  └───────────────────────────────────────┴─ 完成后回到本地会话
+       │
+       ├─ /worktree bring-back <名称>  → 合并 worktree 分支回主分支（要求主目录干净）
+       ├─ /worktree finish <名称> <消息> → 提交到 worktree 分支并保留在那里
+       └─ /worktree remove <名称>       → 删除 worktree 与分支
+```
+
+1. 让 agent 隔离一个任务：**"用 worktree 隔离干活，任务叫 xxx"** —— 模型调用 `worktree_create`，创建 checkout 与分支（`worktree-<名称>`）并注册成工作区。
+2. 在 GUI 中打开返回的路径作为工作区——该会话的 cwd **就是** worktree，所有改动都落在隔离区；子代理自动继承隔离。
+3. 干完后回到本地会话，选择收尾方式：
+   - **`/worktree bring-back <名称>`** —— 先把 worktree 内改动提交到它的分支，再把分支合并回当前主分支（Qoder 的 Move to local）；
+   - **`/worktree finish <名称> <消息>`** —— 直接提交到 worktree 分支并保留；
+   - **`/worktree remove <名称>`**（可加 `--force`）—— 删除 worktree 与其分支。
+4. `/worktree status` / `list` / `prune` 负责查看与清理。
+
+## 安装
+
+```bash
+dsh plugin --profile web add dsh-task-worktree
+```
+
+要求：DeepSeek Harness `0.1.0-rc.7` 包线、Git 2.31+、Node 20+。
+
+## 模型工具
+
+| 工具 | 作用 |
+| --- | --- |
+| `worktree_create {name, baseCommit?, includeUncommitted?}` | 创建任务 worktree（分支 `worktree-<名称>`）；可选把主工作区未提交改动带进去 |
+| `worktree_list` | 列出当前仓库所有受管理 worktree（状态 / dirty / 分支） |
+| `worktree_status {name?}` | 查看单个 worktree 或当前会话所在 worktree 的状态 |
+
+收尾与清理动作（finish / bring-back / remove）**只有人工可触发**，模型永远够不到。
+
+## 人工命令
+
+```
+/worktree create <名称> [<base>] [--carry]
+/worktree list
+/worktree status [<名称>]
+/worktree finish <名称> <消息>
+/worktree bring-back <名称> [<消息>]
+/worktree remove <名称> [--force]
+/worktree prune
+```
+
+## 安全模型
+
+- `@deepseek-ai/*` **只作为 peerDependencies**——由宿主提供；插件绝不向 profile 安装基础设施副本（双实例会破坏 `TOOL_RUNTIME_SCHEDULER` 的 unique symbol，导致工具全部失效）。
+- `bring-back` 要求主工作区干净（`MAIN_DIRTY`），且拒绝在 worktree 内执行。
+- `remove` 拒绝删除当前会话所在的 worktree（`IN_USE`）。
+- 所有 git 操作经 `ctx.subprocess`（harness-managed）；测试路径用 child_process runner。
+- Manifest 原子写入（tmp + rename）；`prune` 清理 checkout 已不存在的记录。
+
+## 本地开发
+
+```bash
+npm test              # 冒烟测试：临时仓库全生命周期
+npm pack --dry-run    # 发布前检查包内容
+```
+
+## License
+
+MIT — see [LICENSE](LICENSE)

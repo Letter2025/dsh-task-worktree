@@ -1,0 +1,96 @@
+# dsh-task-worktree
+
+[![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
+
+English | [中文](README.zh.md)
+
+**Complete Git worktree support for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).**
+
+A community plugin that gives DSH the **task-scoped worktree workflow** of Qoder / Codex / Claude Code: each task gets its own isolated `git worktree` checkout on its own branch, recorded in a per-repo manifest so it **survives sessions and restarts**. The main workspace stays untouched; the worktree is registered as a DSH workspace so you can open it from the GUI and work there, then **bring the changes back** (Move to local) or **commit directly** on the worktree branch — always under explicit human control.
+
+It follows the design of Qoder's `Worktree` execution environment, Codex's `codex worktree create --permanent`, and Claude Code's `--worktree` sessions, adapted to DSH's session/workspace model.
+
+## Design
+
+| Concept (this plugin) | Qoder | Codex | Claude Code |
+| --- | --- | --- | --- |
+| Task-scoped isolated checkout | Worktree execution environment | `codex worktree create --permanent` | `claude --worktree <name>` |
+| Worktrees live in `<repo>/.dsh-worktrees/` | background worktree checkout | `.codex/worktrees/` | `.claude/worktrees/` |
+| Durable registry survives restarts | per-session | global index | session binding |
+| Own branch per task | branch selector | — | `worktree-<name>` |
+| Open as a DSH workspace from the GUI | panel selector | `codex worktree open` | launches into the worktree |
+| Bring changes back to main | Move to local | — | exit/cleanup prompt |
+| Direct commit on the worktree branch | Review & commit panel | commit in the worktree session | commit in the worktree |
+| Carry uncommitted main changes in | Include uncommitted changes toggle | — | `.worktreeinclude` |
+| Auto-ignore the worktree directory | — | — | `.gitignore` tip |
+
+## How it works
+
+```
+Local session                                Worktree session (open <.dsh-worktrees/<name>> as workspace)
+   │  agent calls worktree_create                 │
+   ├─────────────────────────────────────────────►│ isolated checkout, normal dev & commits
+   └──────────────────────────────────────────────┴─ done, back to the local session
+        │
+        ├─ /worktree bring-back <name>  → merge worktree branch into the main branch
+        │                                 (requires a clean main workspace)
+        ├─ /worktree finish <name> <msg> → commit on the worktree branch, keep it there
+        └─ /worktree remove <name>       → delete the worktree + branch
+```
+
+1. Ask the agent to isolate a task: **"用 worktree 隔离干活，任务叫 xxx"** — the model calls `worktree_create`, which creates the checkout and branch (`worktree-<name>`) and registers it as a workspace.
+2. Open the returned path as a workspace in the GUI — that session's cwd **is** the worktree, so every edit stays inside it; subagents inherit the isolation.
+3. When done, go back to the local session and choose:
+   - **`/worktree bring-back <name>`** — commit any worktree changes onto its branch, then merge the branch back into your current main branch (Qoder's Move to local);
+   - **`/worktree finish <name> <message>`** — commit directly on the worktree branch and leave it there;
+   - **`/worktree remove <name>`** (or `--force`) — delete the worktree and its branch.
+4. `/worktree status` / `list` / `prune` inspect and clean up.
+
+## Install
+
+```bash
+dsh plugin --profile web add dsh-task-worktree
+```
+
+Requires: DeepSeek Harness `0.1.0-rc.7` package line, Git 2.31+, Node 20+.
+
+## Model tools
+
+| Tool | Purpose |
+| --- | --- |
+| `worktree_create {name, baseCommit?, includeUncommitted?}` | Create a task worktree (branch `worktree-<name>`); optionally carry uncommitted main-workspace changes in |
+| `worktree_list` | List the repository's managed worktrees (state / dirty / branch) |
+| `worktree_status {name?}` | Status of one worktree, or the one the current session is inside |
+
+Delivery and cleanup actions (finish / bring-back / remove) stay **human-only** — the model never reaches them.
+
+## Human commands
+
+```
+/worktree create <name> [<base>] [--carry]
+/worktree list
+/worktree status [<name>]
+/worktree finish <name> <message>
+/worktree bring-back <name> [<message>]
+/worktree remove <name> [--force]
+/worktree prune
+```
+
+## Safety model
+
+- `@deepseek-ai/*` are **peerDependencies only** — the host supplies them; the plugin never installs infrastructure copies into a profile (a second instance breaks `TOOL_RUNTIME_SCHEDULER`'s unique symbol and kills tool calls).
+- `bring-back` requires a clean main workspace (`MAIN_DIRTY`) and refuses to run from inside the worktree.
+- `remove` refuses the worktree the current session is working inside (`IN_USE`).
+- All git operations go through `ctx.subprocess` (harness-managed); the test path uses a child_process runner.
+- Manifest writes are atomic (tmp + rename); `prune` drops records whose checkout no longer exists.
+
+## Local development
+
+```bash
+npm test              # smoke test: full lifecycle on a scratch repository
+npm pack --dry-run    # inspect the tarball before publishing
+```
+
+## License
+
+MIT — see [LICENSE](LICENSE)

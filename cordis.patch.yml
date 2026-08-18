@@ -1,0 +1,7 @@
+# dsh-task-worktree bundle patch: one insert over the profile root. Later
+# profile layers and the user's own cordis.patch.yml address this row by id;
+# the last write wins per row.
+
+- insert:
+    - id: dsh-task-worktree
+      name: dsh-task-worktree
