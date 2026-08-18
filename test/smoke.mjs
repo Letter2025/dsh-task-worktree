@@ -5,7 +5,7 @@
  * commit (finish), bring-back merge, remove, prune, and error paths.
  * Run: node test/smoke.mjs
  */
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { createProcessRunner } from '../lib/git.js'
@@ -36,7 +36,11 @@ try {
   await run(['init', '-b', 'main'], repo)
   await run(['config', 'user.email', 'smoke@test.local'], repo)
   await run(['config', 'user.name', 'smoke'], repo)
+  // Normalize line endings so the fixture behaves identically on Windows
+  // (autocrlf=true would rewrite carried files to CRLF) and POSIX.
+  await run(['config', 'core.autocrlf', 'false'], repo)
   await writeFile(path.join(repo, 'a.txt'), 'hello\n')
+  await writeFile(path.join(repo, 'tracked.txt'), 'v1\n')
   await run(['add', '-A'], repo)
   await run(['commit', '-m', 'initial'], repo)
   const initialHead = await run(['rev-parse', 'HEAD'], repo)
@@ -103,11 +107,15 @@ try {
 
   console.log('carry uncommitted changes')
   await writeFile(path.join(repo, 'pending.txt'), 'pending\n')
+  await writeFile(path.join(repo, 'tracked.txt'), 'v2-changed\n')
   const carried = await manager.create({ name: 'feature-carry', cwd: repo, includeUncommitted: true, createdBy: 'src-1' })
   const carriedFiles = await run(['ls-files', '--others', '--exclude-standard'], carried.worktree.path)
   const carriedDiff = await run(['status', '--porcelain'], carried.worktree.path)
   check('untracked main file copied into worktree', carriedFiles.includes('pending.txt'))
   check('carried worktree shows the pending file dirty', carriedDiff.includes('?? pending.txt'))
+  const trackedContent = await readFile(path.join(carried.worktree.path, 'tracked.txt'), 'utf8')
+  check('tracked modification carried into worktree', trackedContent === 'v2-changed\n', JSON.stringify(trackedContent))
+  check('carried tracked change shows as modified', carriedDiff.includes('tracked.txt'))
   await run(['checkout', '--', '.'], repo).catch(() => {})
   await run(['clean', '-fd'], repo).catch(() => {})
 
@@ -135,6 +143,34 @@ try {
   let inUse = false
   try { await manager.remove({ name: 'feature-ui', cwd: created2.worktree.path, currentDir: created2.worktree.path }) } catch (e) { inUse = e instanceof WorktreeError && e.code === 'IN_USE' }
   check('remove refuses current worktree', inUse)
+
+  console.log('invalid-name matrix')
+  const invalidNames = ['..', 'a/../b', 'a\\b', '/leading', 'trailing/', 'a//b', '.hidden', '-leading', 'a b', 'a@b', 'a~b', 'a^b', 'a:b', 'a?b', 'a*b', 'a[b', '', '   ']
+  let allRejected = true
+  const accepted = []
+  for (const bad of invalidNames) {
+    try {
+      await manager.create({ name: bad, cwd: repo })
+      allRejected = false
+      accepted.push(bad)
+    } catch (e) {
+      if (!(e instanceof WorktreeError && e.code === 'INVALID_NAME')) { allRejected = false; accepted.push(`${bad} (wrong code: ${e.code})`) }
+    }
+  }
+  check(`all ${invalidNames.length} invalid names rejected`, allRejected, `accepted: ${JSON.stringify(accepted)}`)
+  const validNames = ['feature-auth-2', 'refactor/api/v2', 'a.b_c-d', '0start', 'x']
+  let allAccepted = true
+  for (const good of validNames) {
+    try {
+      const r = await manager.create({ name: good, cwd: repo })
+      await run(['worktree', 'remove', '--force', r.worktree.path], repo)
+      await run(['branch', '-D', good], repo)
+    } catch (e) {
+      allAccepted = false
+      accepted.push(`${good} rejected: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+  check(`all ${validNames.length} valid names accepted`, allAccepted, `rejected: ${JSON.stringify(accepted)}`)
 
   console.log(failed === 0 ? '\nSMOKE OK — all checks passed' : `\nSMOKE FAILED — ${failed} check(s) failed`)
 } finally {
