@@ -1,6 +1,6 @@
 {
   "name": "dsh-task-worktree",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Complete Git worktree support for DeepSeek Harness: task-scoped isolated worktrees with per-repo manifests, workspace registration, bring-back to main, direct commit, and durable state. Reference: Qoder / Codex / Claude Code worktrees.",
   "author": "Letter2025",
   "repository": {
@@ -28,11 +28,15 @@
       "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./client": {
+      "default": "./client/client.js"
+    },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
     "lib",
+    "client",
     "cordis.patch.yml",
     "LICENSE",
     "README.md",
@@ -42,6 +46,15 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-primitives",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ],
+      "platform": "web"
     }
   },
   "peerDependencies": {
@@ -51,8 +64,21 @@
     "@deepseek-ai/dsh-tools": "^0.1.0-rc.7"
   },
   "scripts": {
+    "build:client": "tsdown",
+    "typecheck": "tsc -p tsconfig.client.json --noEmit",
     "test": "node test/smoke.mjs",
-    "prepublishOnly": "npm test"
+    "prepublishOnly": "npm test && npm run build:client"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-client-locale": "next",
+    "@deepseek-ai/dsh-client-runtime": "next",
+    "@deepseek-ai/dsh-client-ui-conversation": "next",
+    "@deepseek-ai/dsh-client-ui-primitives": "next",
+    "@types/react": "~18.3.1",
+    "lightningcss": "^1.25.0",
+    "react": "^18.2.0",
+    "tsdown": "^0.17.2",
+    "typescript": "^5.6.0"
   },
   "engines": {
     "node": ">=20"
