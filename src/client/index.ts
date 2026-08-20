@@ -65,6 +65,24 @@ export function apply(ctx: WorktreeClientContext): void {
     return binding?.session
   }
 
+  /** Resolve the current cwd from the list summary (the outward session face intentionally omits it). */
+  const currentCwd = (): string | undefined => {
+    const snapshot = ctx.sessions.list.getSnapshot()
+    return snapshot.current !== undefined ? snapshot.byId[snapshot.current]?.cwd : undefined
+  }
+
+  /** Open the local workspace that owns the current worktree checkout. */
+  const openLocalWorkspace = async (): Promise<void> => {
+    const cwd = currentCwd()
+    if (typeof cwd !== 'string' || cwd === '') {
+      throw new Error('无法确定当前工作区路径')
+    }
+    const marker = /[\\/]\.dsh-worktrees[\\/]worktree[\\/]/u.exec(cwd)
+    const localPath = marker !== null ? cwd.slice(0, marker.index) : cwd
+    const workspace = await ctx.workspaces.create({ path: localPath })
+    ctx.workspaces.startSession(workspace.workspaceId)
+  }
+
   /**
    * Open a fresh session inside the worktree's registered workspace.
    * The host-side create already registered the path under
@@ -73,8 +91,7 @@ export function apply(ctx: WorktreeClientContext): void {
    * session.
    */
   const openWorktreeWorkspace = async (name: string): Promise<void> => {
-    const session = currentSession()
-    const cwd = session !== undefined ? (session as unknown as { cwd?: string }).cwd : undefined
+    const cwd = currentCwd()
     if (typeof cwd !== 'string' || cwd === '') {
       throw new Error('无法确定主工作区路径')
     }
@@ -88,13 +105,10 @@ export function apply(ctx: WorktreeClientContext): void {
     id: 'worktree',
     order: 10,
     locale: NS,
-    inject: () => ({
-      currentSession,
-      openWorktreeWorkspace,
-      t,
-    }),
   }, () => h(WorktreePanel, {
     currentSession,
+    currentCwd,
+    openLocalWorkspace,
     openWorktreeWorkspace,
     t,
   })))

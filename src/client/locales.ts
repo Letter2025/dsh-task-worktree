@@ -5,6 +5,11 @@
 
 export const zh = {
   panelTitle: '工作树',
+  localMode: '本地模式',
+  worktreeMode: 'Worktree模式',
+  manage: 'Worktree 管理',
+  back: '返回',
+  switching: '正在切换…',
   empty: '暂无受管理的 worktree',
   create: '新建',
   list: '列表',
@@ -23,6 +28,11 @@ export const zh = {
 
 export const en = {
   panelTitle: 'Worktrees',
+  localMode: 'Local mode',
+  worktreeMode: 'Worktree mode',
+  manage: 'Manage worktrees',
+  back: 'Back',
+  switching: 'Switching…',
   empty: 'No managed worktrees yet',
   create: 'New',
   list: 'List',
