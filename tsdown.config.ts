@@ -68,7 +68,10 @@ export default defineConfig({
         targets: { chrome: 90 << 16, firefox: 100 << 16, safari: 13 << 16, edge: 90 << 16 },
       })
       const classMap: Record<string, string> = {}
-      for (const [local, exp] of Object.entries(cssExports ?? {})) classMap[local] = exp.name
+      const sortedExports = Object.entries(cssExports ?? {}).sort(([left], [right]) =>
+        left < right ? -1 : left > right ? 1 : 0,
+      )
+      for (const [local, exp] of sortedExports) classMap[local] = exp.name
       return [
         `const css = ${JSON.stringify(code.toString())};`,
         `const tagId = ${JSON.stringify(`${id}/${basename(fileId)}`)};`,
