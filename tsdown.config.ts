@@ -9,11 +9,12 @@
  * factory execution (the loader removes plugin-owned tags on unload).
  */
 import { readFile } from 'node:fs/promises'
-import { basename, dirname, resolve as resolvePath } from 'node:path'
+import { basename, dirname, relative as relativePath, resolve as resolvePath } from 'node:path'
 import { defineConfig } from 'tsdown'
 import { transform } from 'lightningcss'
 
 const id = 'dsh-task-worktree'
+const PROJECT_ROOT = resolvePath('.')
 
 /**
  * Externals resolved from the loader module table at runtime. Only the
@@ -53,15 +54,17 @@ export default defineConfig({
     resolveId(source, importer) {
       if (!source.endsWith('.module.css')) return null
       const abs = importer !== undefined ? resolvePath(dirname(importer), source) : source
-      return CSS_VIRTUAL_PREFIX + abs + CSS_VIRTUAL_SUFFIX
+      const stableId = relativePath(PROJECT_ROOT, abs).replace(/\\/gu, '/')
+      return CSS_VIRTUAL_PREFIX + stableId + CSS_VIRTUAL_SUFFIX
     },
     async load(this: { addWatchFile(file: string): void }, virtualId: string) {
       if (!virtualId.startsWith(CSS_VIRTUAL_PREFIX)) return null
-      const fileId = virtualId.slice(CSS_VIRTUAL_PREFIX.length, -CSS_VIRTUAL_SUFFIX.length)
+      const stableId = virtualId.slice(CSS_VIRTUAL_PREFIX.length, -CSS_VIRTUAL_SUFFIX.length)
+      const fileId = resolvePath(PROJECT_ROOT, stableId)
       this.addWatchFile(fileId)
       const source = await readFile(fileId)
       const { code, exports: cssExports } = transform({
-        filename: fileId,
+        filename: stableId,
         code: source,
         cssModules: { pattern: '[hash]_[local]' },
         minify: true,
@@ -74,7 +77,7 @@ export default defineConfig({
       for (const [local, exp] of sortedExports) classMap[local] = exp.name
       return [
         `const css = ${JSON.stringify(code.toString())};`,
-        `const tagId = ${JSON.stringify(`${id}/${basename(fileId)}`)};`,
+        `const tagId = ${JSON.stringify(`${id}/${basename(stableId)}`)};`,
         'if (typeof document !== \'undefined\' && document.querySelector(\'style[data-plugin-css=\' + JSON.stringify(tagId) + \']\') === null) {',
         '  const tag = document.createElement(\'style\');',
         `  tag.dataset.plugin = ${JSON.stringify(id)};`,
