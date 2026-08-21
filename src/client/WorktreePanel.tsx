@@ -1,61 +1,60 @@
 /**
  * Compact local/worktree mode selector mounted above the composer.
  *
- * The closed state mirrors the host's metadata controls. Existing worktree
- * commands remain available from the management view inside the popover.
+ * Selecting Worktree mode arms the host (the creation instruction rides the
+ * next user message); the revealed strip optionally takes a name (Enter to
+ * apply). Selecting Local mode disarms. Management commands (/worktree
+ * list/status/...) stay available from the composer directly.
  */
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
-import type { ISession } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SessionFace } from '@deepseek-ai/dsh-client-runtime/client'
 import {
   IconBranchOutline16,
   IconChevronDownOutline14,
-  IconChevronLeftOutline14,
-  IconChevronRightOutline14,
   IconFolderOpenOutline16,
-  IconGoalOutline16,
-  IconListPenOutline16,
-  IconPlusOutline16,
-  IconTrashOutline16,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { WorktreeKey } from './locales.ts'
+import type { WorktreeStore } from './worktreeStore.ts'
 import css from './WorktreePanel.module.css'
 
-type PanelView = 'mode' | 'actions' | 'create'
-
 const WORKTREE_PATH = /[\\/]\.dsh-worktrees[\\/]worktree[\\/]/u
+
+/** Minimal console/debug hook exposed for in-GUI diagnosis. */
+declare global {
+  interface Window {
+    __dshTaskWorktreePanelDebug?: {
+      sessionId: string | undefined
+      mode: string
+      hero: boolean
+      declaredWorktree: boolean
+    }
+  }
+}
 
 /** Injected callbacks (from the plugin apply closure — components never see ctx). */
 export interface WorktreePanelInjected {
   /** Resolve the current session face (or undefined when absent). */
-  currentSession(): ISession | undefined
+  currentSession(): SessionFace | undefined
   /** Resolve the current session's workspace cwd from the session-list summary. */
   currentCwd(): string | undefined
-  /** Open a fresh session in the local workspace that owns the current worktree. */
+  /** Whether the staged session is a blank (empty-log) conversation. */
+  currentBlank(): boolean
+  /** Open a fresh session in the local workspace that owns the current worktree (legacy checkout sessions). */
   openLocalWorkspace(): Promise<void>
-  /** After `/worktree create <name>` succeeded, open a session in the new checkout. */
-  openWorktreeWorkspace(name: string): Promise<void>
+  /** Arm worktree mode: the host injects the creation instruction with the next user message (optional name). */
+  armWorktreeMode(name: string | undefined): Promise<void>
+  /** Disarm worktree mode. */
+  disarmWorktreeMode(): Promise<void>
 }
 
 export interface WorktreePanelProps extends WorktreePanelInjected {
   /** Locale-bound strings for the action labels. */
   t: (key: keyof WorktreeKey) => string
-}
-
-/** Run one slash command on the current session; returns false on missing session or unhandled command. */
-async function runCommand(injected: WorktreePanelInjected, line: string): Promise<boolean> {
-  const session = injected.currentSession()
-  if (session === undefined) return false
-  const result = await session.command(line)
-  if (!result.ok) return false
-  return result.value.matched
-}
-
-/** Execute a command, then open the worktree workspace session for create actions. */
-async function createAndOpen(injected: WorktreePanelInjected, name: string): Promise<void> {
-  const matched = await runCommand(injected, `/worktree create ${name}`)
-  if (!matched) throw new Error(`create command not matched: /worktree create ${name}`)
-  await injected.openWorktreeWorkspace(name)
+  /** The declared-worktree store. */
+  store: WorktreeStore
+  /** Resolve the staged session id. */
+  sessionIdOf(): string | undefined
 }
 
 function currentMode(injected: WorktreePanelInjected): 'local' | 'worktree' {
@@ -64,14 +63,40 @@ function currentMode(injected: WorktreePanelInjected): 'local' | 'worktree' {
 }
 
 export function WorktreePanel(props: WorktreePanelProps): ReactNode {
-  const { t } = props
+  const { t, store, sessionIdOf } = props
   const rootRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
-  const [view, setView] = useState<PanelView>('mode')
   const [name, setName] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const mode = currentMode(props)
+  const nameTimer = useRef<number | undefined>(undefined)
+  /** Last raw name actually sent to the host (dedup guard for re-arms). */
+  const lastAppliedRef = useRef<string>('')
+  useSyncExternalStore(store.subscribe, store.getVersion)
+  const sessionId = sessionIdOf()
+  const declared = store.stateOf(sessionId)
+  // Blank-hero bit still tracked for layout/debugging; the strip itself is
+  // driven purely by the mode dropdown selection.
+  const hero = props.currentBlank()
+  // A conversation declared (or runs inside) a worktree shows worktree mode.
+  const mode = declared.worktree || currentMode(props) === 'worktree' ? 'worktree' : 'local'
+
+  // Keep the name input in sync with the committed worktree name.
+  useEffect(() => {
+    setName(declared.name ?? '')
+  }, [declared.name])
+
+  // Clear the pending name-apply timer on unmount.
+  useEffect(() => () => {
+    if (nameTimer.current !== undefined) window.clearTimeout(nameTimer.current)
+  }, [])
+
+  window.__dshTaskWorktreePanelDebug = {
+    sessionId,
+    mode,
+    hero,
+    declaredWorktree: declared.worktree,
+  }
 
   useLayoutEffect(() => {
     const root = rootRef.current
@@ -106,7 +131,6 @@ export function WorktreePanel(props: WorktreePanelProps): ReactNode {
 
   const closeMenu = (): void => {
     setOpen(false)
-    setView('mode')
     setName('')
   }
 
@@ -131,31 +155,7 @@ export function WorktreePanel(props: WorktreePanelProps): ReactNode {
     window.setTimeout(() => setNotice(null), 1800)
   }
 
-  const runQuick = (line: string): void => {
-    if (busy !== null) return
-    setBusy(line)
-    void runCommand(props, line).then(ok => {
-      if (!ok) showFailure()
-      closeMenu()
-    }).finally(() => {
-      setBusy(null)
-    })
-  }
-
-  const submitCreate = (): void => {
-    const trimmed = name.trim()
-    if (trimmed === '' || busy !== null) return
-    setBusy('create')
-    void createAndOpen(props, trimmed).then(() => {
-      closeMenu()
-    }).catch(() => {
-      showFailure()
-    }).finally(() => {
-      setBusy(null)
-      setName('')
-    })
-  }
-
+  /** Legacy: leave a session actually running inside a worktree checkout. */
   const switchLocal = (): void => {
     if (busy !== null) return
     if (mode === 'local') {
@@ -174,9 +174,56 @@ export function WorktreePanel(props: WorktreePanelProps): ReactNode {
 
   const toggleMenu = (): void => {
     setOpen(value => !value)
-    setView('mode')
-    setName('')
   }
+
+  /** 本地模式 radio: disarm the declared worktree mode, or leave a legacy checkout session. */
+  const selectLocal = (): void => {
+    if (busy !== null) return
+    if (declared.worktree) {
+      disarmMode()
+      closeMenu()
+      return
+    }
+    if (mode === 'worktree') {
+      switchLocal()
+      return
+    }
+    closeMenu()
+  }
+
+  /** Commit the typed worktree name: re-arms the host with that name (mode-on
+ * is idempotent; the pending name simply updates). Debounced at 900ms and
+ * deduplicated against the previously applied value — a single typing run
+ * produces at most ONE command row in the conversation, not one per pause. */
+  const applyName = (value: string): void => {
+    setName(value)
+    const trimmed = value.trim()
+    if (trimmed === lastAppliedRef.current) return
+    if (nameTimer.current !== undefined) window.clearTimeout(nameTimer.current)
+    nameTimer.current = window.setTimeout(() => {
+      nameTimer.current = undefined
+      if (busy !== null) return
+      lastAppliedRef.current = trimmed
+      void props.armWorktreeMode(trimmed === '' ? undefined : trimmed).catch(() => {
+        lastAppliedRef.current = ''
+        showFailure()
+      })
+    }, 900)
+  }
+
+  const disarmMode = (): void => {
+    if (busy !== null) return
+    setBusy('disarmMode')
+    void props.disarmWorktreeMode().catch(() => {
+      showFailure()
+    }).finally(() => {
+      setBusy(null)
+    })
+  }
+
+  // The mode selector only matters before the conversation starts; after the
+  // first message the header badge carries the mode indication instead.
+  if (!hero) return null
 
   return (
     <div
@@ -203,99 +250,53 @@ export function WorktreePanel(props: WorktreePanelProps): ReactNode {
         />
       </button>
 
+      {declared.worktree && (
+        <div className={css.heroStart} data-testid="worktree-mode-start">
+          <IconBranchOutline16 size={14} className={css.icon} />
+          <span className={css.heroStartLabel}>{t('heroStartLabel')}</span>
+          <input
+            className={css.heroStartInput}
+            value={name}
+            onChange={event => applyName(event.target.value)}
+            placeholder={t('heroStartPlaceholder')}
+            aria-label={t('heroStartPlaceholder')}
+            disabled={busy !== null}
+          />
+        </div>
+      )}
+
       {open && (
         <div className={css.popover} role="menu" data-testid="worktree-mode-menu">
-          {view === 'mode' && (
-            <>
-              <button
-                type="button"
-                role="menuitemradio"
-                aria-checked={mode === 'local'}
-                className={`${css.menuItem} ${mode === 'local' ? css.selected : ''}`}
-                disabled={busy !== null}
-                onClick={switchLocal}
-              >
-                <IconFolderOpenOutline16 size={14} className={css.icon} />
-                <span>{busy === 'local' ? t('switching') : t('localMode')}</span>
-              </button>
-              <button
-                type="button"
-                role="menuitemradio"
-                aria-checked={mode === 'worktree'}
-                className={`${css.menuItem} ${mode === 'worktree' ? css.selected : ''}`}
-                disabled={busy !== null}
-                onClick={() => { if (mode === 'worktree') closeMenu(); else setView('create') }}
-              >
-                <IconBranchOutline16 size={14} className={css.icon} />
-                <span>{t('worktreeMode')}</span>
-              </button>
-              <div className={css.separator} role="separator" />
-              <button type="button" role="menuitem" className={css.menuItem} onClick={() => setView('actions')}>
-                <IconListPenOutline16 size={14} className={css.icon} />
-                <span>{t('manage')}</span>
-                <IconChevronRightOutline14 size={12} className={css.trailingIcon} />
-              </button>
-            </>
-          )}
-
-          {view === 'actions' && (
-            <>
-              <div className={css.menuHeader}>
-                <button type="button" className={css.backButton} aria-label={t('back')} onClick={() => setView('mode')}>
-                  <IconChevronLeftOutline14 size={13} />
-                </button>
-                <span>{t('manage')}</span>
-              </div>
-              <button type="button" role="menuitem" className={css.menuItem} onClick={() => setView('create')}>
-                <IconPlusOutline16 size={14} className={css.icon} />
-                <span>{t('create')}</span>
-              </button>
-              <button type="button" role="menuitem" className={css.menuItem} onClick={() => runQuick('/worktree list')}>
-                <IconListPenOutline16 size={14} className={css.icon} />
-                <span>{t('list')}</span>
-              </button>
-              <button type="button" role="menuitem" className={css.menuItem} onClick={() => runQuick('/worktree status')}>
-                <IconGoalOutline16 size={14} className={css.icon} />
-                <span>{t('status')}</span>
-              </button>
-              <button type="button" role="menuitem" className={`${css.menuItem} ${css.danger}`} onClick={() => runQuick('/worktree prune')}>
-                <IconTrashOutline16 size={14} className={css.icon} />
-                <span>{t('prune')}</span>
-              </button>
-            </>
-          )}
-
-          {view === 'create' && (
-            <div className={css.createPanel}>
-              <div className={css.menuHeader}>
-                <button type="button" className={css.backButton} aria-label={t('back')} onClick={() => setView('mode')}>
-                  <IconChevronLeftOutline14 size={13} />
-                </button>
-                <span>{t('create')}</span>
-              </div>
-              <input
-                className={css.nameInput}
-                value={name}
-                onChange={event => setName(event.target.value)}
-                onKeyDown={event => { if (event.key === 'Enter') submitCreate() }}
-                placeholder={t('createPlaceholder')}
-                autoFocus
-              />
-              <div className={css.createActions}>
-                <button type="button" className={css.secondaryButton} onClick={() => setView('mode')}>
-                  {t('cancel')}
-                </button>
-                <button
-                  type="button"
-                  className={css.primaryButton}
-                  disabled={name.trim() === '' || busy !== null}
-                  onClick={submitCreate}
-                >
-                  {busy === 'create' ? '…' : t('confirm')}
-                </button>
-              </div>
-            </div>
-          )}
+          <button
+            type="button"
+            role="menuitemradio"
+            aria-checked={mode === 'local'}
+            className={`${css.menuItem} ${mode === 'local' ? css.selected : ''}`}
+            disabled={busy !== null}
+            onClick={selectLocal}
+          >
+            <IconFolderOpenOutline16 size={14} className={css.icon} />
+            <span>{busy === 'local' ? t('switching') : t('localMode')}</span>
+          </button>
+          <button
+            type="button"
+            role="menuitemradio"
+            aria-checked={mode === 'worktree'}
+            className={`${css.menuItem} ${mode === 'worktree' ? css.selected : ''}`}
+            disabled={busy !== null}
+            onClick={() => {
+              // Selecting worktree mode arms the host immediately (the
+              // creation instruction rides the next message); the strip
+              // lets you set a name with Enter.
+              if (!declared.worktree) {
+                void props.armWorktreeMode(undefined).catch(() => showFailure())
+              }
+              closeMenu()
+            }}
+          >
+            <IconBranchOutline16 size={14} className={css.icon} />
+            <span>{t('worktreeMode')}</span>
+          </button>
         </div>
       )}
 

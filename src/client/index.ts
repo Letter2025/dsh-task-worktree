@@ -1,16 +1,19 @@
 /**
  * dsh-task-worktree browser half.
  *
- * Mounts a compact worktree action bar into `conversation.input.dock`.
- * Implements the Qoder-style environment flow through the client runtime
- * services:
- * - buttons execute `/worktree ...` on the current session (ISession.command);
- * - 「新建」creates the worktree then opens a fresh session inside its
- *   registered workspace (workspaces.create + startSession), so the user
- *   keeps typing in the isolated checkout.
+ * Mounts a compact worktree action bar into `conversation.input.dock`, a
+ * worktree recognition badge into `conversation.session.header.actions`, and
+ * a "start in worktree mode" strip on blank conversations.
  *
- * The plugin apply injects the sessions/workspaces services and hands plain
- * callbacks to the components (AGENTS.md client discipline).
+ * Workspace discipline: creating a worktree NEVER registers a workspace and
+ * NEVER switches the conversation — work continues in-place.
+ *
+ * Data channels: the strip's blank-hero detection reads the host session
+ * list (`blank` flag and cwd — window-independent); the badge reads the
+ * worktree declaration store (set by start-in-worktree-mode) plus the session
+ * cwd. Note: framework session standard props (useSession / useInput) are NOT
+ * injected into slot components in the current shell, so nothing depends on
+ * them.
  *
  * Built by tsdown into the __ModuleLoader__ factory bundle at
  * client/client.js; the only externals are the loader module table's react
@@ -18,12 +21,15 @@
  */
 import { createElement as h } from 'react'
 import type {
-  ISession,
   ISessions,
   IWorkspaces,
+  SessionFace,
+  SessionId,
 } from '@deepseek-ai/dsh-client-runtime/client'
 import { en, zh } from './locales.ts'
+import { WorktreeBadge } from './WorktreeBadge.tsx'
 import { WorktreePanel } from './WorktreePanel.tsx'
+import { createWorktreeStore } from './worktreeStore.ts'
 
 const NS = 'dsh-task-worktree'
 
@@ -57,18 +63,30 @@ export function apply(ctx: WorktreeClientContext): void {
 
   const t = (key: string): string => ctx.locale.bind(NS)(key)
 
+  /** Reactive store for worktree-mode declarations. */
+  const store = createWorktreeStore()
+
   /** Resolve the current session face through the current selection id. */
-  const currentSession = (): ISession | undefined => {
+  const currentSession = (): SessionFace | undefined => {
     const current = ctx.sessions.list.getSnapshot().current
     if (current === undefined) return undefined
     const binding = ctx.sessions.binding(current)
     return binding?.session
   }
 
+  /** Resolve the current selection id (the staged conversation). */
+  const currentSessionId = (): SessionId | undefined => ctx.sessions.list.getSnapshot().current
+
   /** Resolve the current cwd from the list summary (the outward session face intentionally omits it). */
   const currentCwd = (): string | undefined => {
     const snapshot = ctx.sessions.list.getSnapshot()
     return snapshot.current !== undefined ? snapshot.byId[snapshot.current]?.cwd : undefined
+  }
+
+  /** Whether the staged session is still blank (host-computed empty-log bit). */
+  const currentBlank = (): boolean => {
+    const snapshot = ctx.sessions.list.getSnapshot()
+    return snapshot.current !== undefined && snapshot.byId[snapshot.current]?.blank === true
   }
 
   /** Open the local workspace that owns the current worktree checkout. */
@@ -84,22 +102,36 @@ export function apply(ctx: WorktreeClientContext): void {
   }
 
   /**
-   * Open a fresh session inside the worktree's registered workspace.
-   * The host-side create already registered the path under
-   * `<session-cwd>/.dsh-worktrees/worktree/<name>`; workspaces.create is
-   * idempotent and returns the existing workspace, whose id starts the
-   * session.
+   * Arm this conversation for worktree mode: the host injects the creation
+   * instruction with the NEXT genuine user message (no separate prompt, no
+   * workspace registration). Name from the caller when given, otherwise the
+   * model proposes one. On success the session is declared worktree-mode in
+   * the store (the badge switches on immediately).
    */
-  const openWorktreeWorkspace = async (name: string): Promise<void> => {
-    const cwd = currentCwd()
-    if (typeof cwd !== 'string' || cwd === '') {
-      throw new Error('无法确定主工作区路径')
-    }
-    const path = `${cwd.replace(/[\\/]+$/u, '')}\\.dsh-worktrees\\worktree\\${name}`
-    const workspace = await ctx.workspaces.create({ path })
-    ctx.workspaces.startSession(workspace.workspaceId)
+  const armWorktreeMode = async (rawName: string | undefined): Promise<void> => {
+    const sessionId = currentSessionId()
+    const session = currentSession()
+    if (session === undefined || sessionId === undefined) throw new Error('当前没有可注入的对话')
+    // Branch convention: every managed branch starts with "worktree/".
+    const trimmed = rawName?.trim() ?? ''
+    const name = trimmed === '' ? undefined : (trimmed.startsWith('worktree/') ? trimmed : `worktree/${trimmed}`)
+    const line = name !== undefined ? `/worktree mode-on ${name}` : '/worktree mode-on'
+    const result = await session.command(line)
+    if (!result.ok || result.value.matched !== true) throw new Error('指令未执行成功')
+    store.declare(sessionId, name)
   }
 
+  /** Disarm worktree mode for the current conversation. */
+  const disarmWorktreeMode = async (): Promise<void> => {
+    const sessionId = currentSessionId()
+    const session = currentSession()
+    if (session === undefined || sessionId === undefined) throw new Error('当前没有可注入的对话')
+    const result = await session.command('/worktree mode-off')
+    if (!result.ok || result.value.matched !== true) throw new Error('指令未执行成功')
+    store.clear(sessionId)
+  }
+
+  // ── Slots ──────────────────────────────────────────────────────────────
   ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
     name: 'conversation.input.dock',
     id: 'worktree',
@@ -108,8 +140,25 @@ export function apply(ctx: WorktreeClientContext): void {
   }, () => h(WorktreePanel, {
     currentSession,
     currentCwd,
+    currentBlank,
     openLocalWorkspace,
-    openWorktreeWorkspace,
+    armWorktreeMode,
+    disarmWorktreeMode,
+    store,
+    sessionIdOf: currentSessionId,
+    t,
+  })))
+
+  ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
+    name: 'conversation.session.header.actions',
+    id: 'worktree-badge',
+    // Negative order: static session context precedes interactive actions.
+    order: -30,
+    locale: NS,
+  }, () => h(WorktreeBadge, {
+    store,
+    sessionIdOf: currentSessionId,
+    currentCwd,
     t,
   })))
 }

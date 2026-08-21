@@ -4,7 +4,7 @@ English | [中文](README.zh.md)
 
 **Complete Git worktree support for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).**
 
-A community plugin that gives DSH the **task-scoped worktree workflow** of Qoder / Codex / Claude Code: each task gets its own isolated `git worktree` checkout on its own branch, recorded in a per-repo manifest so it **survives sessions and restarts**. The main workspace stays untouched; the worktree is registered as a DSH workspace so you can open it from the GUI and work there, then **bring the changes back** (Move to local) or **commit directly** on the worktree branch — always under explicit human control.
+A community plugin that gives DSH the **task-scoped worktree workflow** of Qoder / Codex / Claude Code: each task gets its own isolated `git worktree` checkout on its own branch, recorded in a per-repo manifest so it **survives sessions and restarts**. The main workspace stays untouched; conversations that use a worktree are marked with a **branch badge** on the session header (no workspace entry is created), and the changes can be **brought back** (Move to local) or **committed directly** on the worktree branch — always under explicit human control.
 
 It follows the design of Qoder's `Worktree` execution environment, Codex's `codex worktree create --permanent`, and Claude Code's `--worktree` sessions, adapted to DSH's session/workspace model.
 
@@ -17,6 +17,7 @@ It follows the design of Qoder's `Worktree` execution environment, Codex's `code
 | Durable registry survives restarts | per-session | global index | session binding |
 | Own branch per task | branch selector | — | `worktree-<name>` |
 | Open as a DSH workspace from the GUI | panel selector | `codex worktree open` | launches into the worktree |
+| Mark the conversation using the worktree | session badge | — | — |
 | Bring changes back to main | Move to local | — | exit/cleanup prompt |
 | Direct commit on the worktree branch | Review & commit panel | commit in the worktree session | commit in the worktree |
 | Carry uncommitted main changes in | Include uncommitted changes toggle | — | `.worktreeinclude` |
@@ -25,24 +26,43 @@ It follows the design of Qoder's `Worktree` execution environment, Codex's `code
 ## How it works
 
 ```
-Local session                                Worktree session (open <.dsh-worktrees/<name>> as workspace)
-   │  agent calls worktree_create                 │
-   ├─────────────────────────────────────────────►│ isolated checkout, normal dev & commits
-   └──────────────────────────────────────────────┴─ done, back to the local session
-        │
-        ├─ /worktree bring-back <name>  → merge worktree branch into the main branch
-        │                                 (requires a clean main workspace)
-        ├─ /worktree finish <name> <msg> → commit on the worktree branch, keep it there
-        └─ /worktree remove <name>       → delete the worktree + branch
+Blank conversation: pick "Worktree mode" in the dock dropdown (before the
+conversation starts) → optional branch name (auto-prefixed "worktree/")
+   │  send the first message → the host injects an instructions context block
+   ▼  the model calls worktree_create on that same turn
+   │  git worktree add -b worktree/<name> <repo>/.dsh-worktrees/worktree/worktree/<name>
+   │  NO workspace is registered, NO conversation switch — the session header
+   │  badge marks the worktree this conversation uses
+   ▼  work continues in the same conversation (the model uses absolute paths
+      inside the checkout); when done the model reminds you how to clean up
+   │
+   ├─ /worktree bring-back worktree/<name>   → merge the branch into the main branch
+   │                                            (requires a clean main workspace)
+   ├─ /worktree finish worktree/<name> <msg>  → commit on the worktree branch, keep it
+   └─ /worktree remove worktree/<name> --force→ delete the worktree + branch
+                                                (--force also deletes uncommitted changes)
 ```
 
-1. Ask the agent to isolate a task: **"用 worktree 隔离干活，任务叫 xxx"** — the model calls `worktree_create`; the name is both the branch and the relative path (slashes allowed, e.g. `refactor/logging` → `.dsh-worktrees/worktree/refactor/logging`) and the worktree is registered as a workspace.
-2. Open the returned path as a workspace in the GUI — that session's cwd **is** the worktree, so every edit stays inside it; subagents inherit the isolation.
-3. When done, go back to the local session and choose:
-   - **`/worktree bring-back <name>`** — commit any worktree changes onto its branch, then merge the branch back into your current main branch (Qoder's Move to local);
-   - **`/worktree finish <name> <message>`** — commit directly on the worktree branch and leave it there;
-   - **`/worktree remove <name>`** (or `--force`) — delete the worktree and its branch.
-4. `/worktree status` / `list` / `prune` inspect and clean up.
+1. **Start in worktree mode**: on a blank conversation the dock selector shows
+   「Branch:」 before you send anything — picking "Worktree mode" ARMS the
+   session, and the branch-name field is optional (typed names are
+   auto-prefixed `worktree/`, blank lets the model propose one). The mode
+   selector disappears once the conversation starts; the session-header badge
+   takes over the indication.
+2. **Send your first message** — the host injects one `instructions` context
+   block (shown as 上下文注入) right before your message: create the worktree
+   with a `worktree/`-prefixed branch, work inside the checkout path, and at
+   the end remind the user with copy-paste cleanup commands
+   (`bring-back` or `remove --force`).
+3. Or skip the mode and ask the agent directly: **"用 worktree 隔离干活，任务叫 xxx"**
+   — the model calls `worktree_create`; the name is both the branch and the
+   relative path (slashes allowed).
+4. No workspace entry is created, so the sidebar stays uncluttered. The badge
+   on the session header shows the branch name while the conversation is in
+   worktree mode.
+5. When done: `bring-back` / `finish` / `remove` (all human-only, as above);
+   `/worktree list` / `status` / `prune` inspect and clean up (`prune` also
+   drops stale workspace registrations for removed checkouts).
 
 ## Install
 
@@ -65,6 +85,8 @@ Delivery and cleanup actions (finish / bring-back / remove) stay **human-only** 
 ## Human commands
 
 ```
+/worktree mode-on [<name>]     arm worktree mode (injection with the next message)
+/worktree mode-off             disarm worktree mode
 /worktree create <name> [<base>] [--carry]
 /worktree list
 /worktree status [<name>]

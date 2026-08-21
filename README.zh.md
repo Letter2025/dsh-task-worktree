@@ -4,7 +4,7 @@
 
 [English](README.md) | 中文
 
-一个社区插件：给 DSH 带来 Qoder / Codex / Claude Code 同款的**任务级 worktree 工作流**。每个任务拥有一个**独立的 `git worktree` checkout**（独立分支），记录在 per-repo manifest 中，**跨会话、跨重启永久保存**。主工作区保持干净；worktree 注册为 DSH 工作区，可从 GUI 打开、在隔离环境中干活，干完后**带回到主目录**（Move to local）或**直接提交**在 worktree 分支上——一切收尾都由你（人）显式决定。
+一个社区插件：给 DSH 带来 Qoder / Codex / Claude Code 同款的**任务级 worktree 工作流**。每个任务拥有一个**独立的 `git worktree` checkout**（独立分支），记录在 per-repo manifest 中，**跨会话、跨重启永久保存**。主工作区保持干净；使用 worktree 的对话会在**会话头部显示分支徽标**（不再注册工作区、不打乱侧边栏），干完后**带回到主目录**（Move to local）或**直接提交**在 worktree 分支上——一切收尾都由你（人）显式决定。
 
 设计参考：Qoder 的 `Worktree` 执行环境、Codex 的 `codex worktree create --permanent`、Claude Code 的 `--worktree` 会话，并适配 DSH 的会话/工作区模型。
 
@@ -17,6 +17,7 @@
 | 注册表跨重启持久 | 按会话 | 全局索引 | 会话绑定 |
 | 每任务独立分支 | 分支选择器 | — | `worktree-<名称>` |
 | 从 GUI 打开（注册为 DSH 工作区） | 面板选择器 | `codex worktree open` | 直接进入 worktree |
+| 会话头部徽标标识对话所用 worktree | 会话标识 | — | — |
 | 把改动带回主目录 | Move to local | — | 退出/清理询问 |
 | 直接在 worktree 分支提交 | Review & commit 面板 | worktree 会话内提交 | worktree 内提交 |
 | 携带主目录未提交改动 | Include uncommitted changes | — | `.worktreeinclude` |
@@ -25,23 +26,24 @@
 ## 工作流
 
 ```
-本地会话                              worktree 会话（打开 .dsh-worktrees/<名称> 作为工作区）
-  │ agent 调 worktree_create              │
-  ├───────────────────────────────────────►│ 独立 checkout，正常开发与提交
-  └───────────────────────────────────────┴─ 完成后回到本地会话
-       │
-       ├─ /worktree bring-back <名称>  → 合并 worktree 分支回主分支（要求主目录干净）
-       ├─ /worktree finish <名称> <消息> → 提交到 worktree 分支并保留在那里
-       └─ /worktree remove <名称>       → 删除 worktree 与分支
+空白对话：发送前在下拉框选「Worktree模式」（分支名可选，自动加 worktree/ 前缀）
+   │  发送第一条消息 → 宿主注入一条「上下文注入」instructions 块
+   ▼  模型在同一轮调用 worktree_create
+   │  git worktree add -b worktree/<名称> <仓库>/.dsh-worktrees/worktree/worktree/<名称>
+   │  不注册工作区、不切换对话；会话头部徽标标记该对话使用的 worktree
+   ▼  对话原地继续，模型在 checkout 路径（绝对路径）内干活；完成后模型提醒收尾
+   │
+   ├─ /worktree bring-back worktree/<名称>   → 合并分支回主分支（要求主目录干净）
+   ├─ /worktree finish worktree/<名称> <消息>  → 提交到 worktree 分支并保留
+   └─ /worktree remove worktree/<名称> --force → 删除 worktree 与分支
+                                                 （--force 连未提交改动一起删）
 ```
 
-1. 让 agent 隔离一个任务：**"用 worktree 隔离干活，任务叫 xxx"** —— 模型调用 `worktree_create`，name 同时作分支名与路径（支持斜杠，如 `refactor/logging` → `.dsh-worktrees/worktree/refactor/logging`）并注册成工作区。
-2. 在 GUI 中打开返回的路径作为工作区——该会话的 cwd **就是** worktree，所有改动都落在隔离区；子代理自动继承隔离。
-3. 干完后回到本地会话，选择收尾方式：
-   - **`/worktree bring-back <名称>`** —— 先把 worktree 内改动提交到它的分支，再把分支合并回当前主分支（Qoder 的 Move to local）；
-   - **`/worktree finish <名称> <消息>`** —— 直接提交到 worktree 分支并保留；
-   - **`/worktree remove <名称>`**（可加 `--force`）—— 删除 worktree 与其分支。
-4. `/worktree status` / `list` / `prune` 负责查看与清理。
+1. **以 Worktree 模式开始**：空白对话、发送前，dock 选择器显示「分支名：」——选「Worktree模式」即武装会话；分支名可选（输入的会自动加 `worktree/` 前缀，留空由模型拟定）。**对话开始后选择器自动隐藏**，由会话头部徽标接管指示。
+2. **发送第一条消息** → 宿主在你消息前注入一条 `instructions` 上下文块（界面显示为「上下文注入」）：创建 `worktree/` 前缀分支、在 checkout 路径内干活、任务结束时**给出可复制的收尾命令**（`bring-back` 或 `remove --force`）。
+3. 或跳过模式，直接让 agent 隔离任务：**"用 worktree 隔离干活，任务叫 xxx"** —— 模型调用 `worktree_create`，name 同时作分支名与路径（支持斜杠）。
+4. **不注册任何工作区**，侧边栏保持干净；worktree 模式下会话头部显示分支徽标。
+5. 干完后收尾：`bring-back` / `finish` / `remove`（均仅人工可触发）；`/worktree list` / `status` / `prune` 查看与清理（`prune` 顺带清理已消失 checkout 的工作区注册）。
 
 ## 安装
 
@@ -64,6 +66,8 @@ dsh plugin --profile web add dsh-task-worktree
 ## 人工命令
 
 ```
+/worktree mode-on [<名称>]       武装 worktree 模式（下条消息随之注入指引）
+/worktree mode-off               关闭 worktree 模式
 /worktree create <名称> [<base>] [--carry]
 /worktree list
 /worktree status [<名称>]
