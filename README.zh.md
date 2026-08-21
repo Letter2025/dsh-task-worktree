@@ -4,6 +4,8 @@
 
 [English](README.md) | 中文
 
+[![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
+
 一个社区插件：给 DSH 带来 Qoder / Codex / Claude Code 同款的**任务级 worktree 工作流**。每个任务拥有一个**独立的 `git worktree` checkout**（独立分支），记录在 per-repo manifest 中，**跨会话、跨重启永久保存**。主工作区保持干净；使用 worktree 的对话会在**会话头部显示分支徽标**（不再注册工作区、不打乱侧边栏），干完后**带回到主目录**（Move to local）或**直接提交**在 worktree 分支上——一切收尾都由你（人）显式决定。
 
 设计参考：Qoder 的 `Worktree` 执行环境、Codex 的 `codex worktree create --permanent`、Claude Code 的 `--worktree` 会话，并适配 DSH 的会话/工作区模型。
