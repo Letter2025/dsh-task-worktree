@@ -358,12 +358,20 @@
 }
 
 :global([data-phase='hero']) .root {
-  margin-top: -34px;
-  padding-left: var(--worktree-hero-inset, 204px);
+  /* Own mode bar below the official chip row, content aligned with the
+     chip row's LEFT edge (the dsh-task-worktree chip): the shell insets
+     its chip row ~20px from the dock container edge. No negative margin
+     or chip-row lifting. */
+  display: inline-flex;
+  flex: none;
+  width: auto;
+  max-width: calc(100% - 32px);
+  align-self: flex-start;
+  padding-left: 20px;
 }
 
 :global([data-phase='hero']) .popover {
-  left: var(--worktree-hero-inset, 204px);
+  left: 20px;
 }
 
 @media (max-width: 720px) {
