@@ -1,14 +1,13 @@
 # dsh-task-worktree
 
 [![release](https://img.shields.io/npm/v/dsh-task-worktree?style=flat&label=release&color=blue)](https://www.npmjs.com/package/dsh-task-worktree)
-[![downloads](https://img.shields.io/npm/dm/dsh-task-worktree?style=flat&label=downloads&color=blue)](https://www.npmjs.com/package/dsh-task-worktree)
+[![downloads](https://img.shields.io/npm/dt/dsh-task-worktree?style=flat&label=downloads&color=blue)](https://www.npmjs.com/package/dsh-task-worktree)
 [![stars](https://img.shields.io/github/stars/Letter2025/dsh-task-worktree?style=flat&label=stars&color=blue)](https://github.com/Letter2025/dsh-task-worktree)
 [![license](https://img.shields.io/github/license/Letter2025/dsh-task-worktree?style=flat&label=license&color=blue)](LICENSE)
+[![language](https://img.shields.io/github/languages/top/Letter2025/dsh-task-worktree?style=flat&label=language&color=blue)](https://github.com/Letter2025/dsh-task-worktree)
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 
 English | [中文](README.zh.md)
-
-[![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 
 **Complete Git worktree support for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).**
 
