@@ -1,10 +1,10 @@
 # dsh-task-worktree
 
-[![release](https://img.shields.io/npm/v/dsh-task-worktree?label=release)](https://www.npmjs.com/package/dsh-task-worktree)
-[![downloads](https://img.shields.io/npm/dm/dsh-task-worktree?label=downloads)](https://www.npmjs.com/package/dsh-task-worktree)
-[![stars](https://img.shields.io/github/stars/Letter2025/dsh-task-worktree?style=flat&label=stars)](https://github.com/Letter2025/dsh-task-worktree)
-[![license](https://img.shields.io/github/license/Letter2025/dsh-task-worktree?label=license)](LICENSE)
-[![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-000000?label=platform)](https://github.com/Letter2025/dsh-task-worktree)
+[![release](https://img.shields.io/npm/v/dsh-task-worktree?style=flat&label=release&color=blue)](https://www.npmjs.com/package/dsh-task-worktree)
+[![downloads](https://img.shields.io/npm/dm/dsh-task-worktree?style=flat&label=downloads&color=blue)](https://www.npmjs.com/package/dsh-task-worktree)
+[![stars](https://img.shields.io/github/stars/Letter2025/dsh-task-worktree?style=flat&label=stars&color=blue)](https://github.com/Letter2025/dsh-task-worktree)
+[![license](https://img.shields.io/github/license/Letter2025/dsh-task-worktree?style=flat&label=license&color=blue)](LICENSE)
+[![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 
 English | [中文](README.zh.md)
 
