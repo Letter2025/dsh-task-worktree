@@ -6,8 +6,7 @@
 [![license](https://img.shields.io/github/license/Letter2025/dsh-task-worktree?style=flat&label=license&color=blue)](LICENSE)
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 
-[![English](https://img.shields.io/badge/English-007bff?style=flat)](README.md)
-[![中文](https://img.shields.io/badge/中文-e60012?style=flat)](README.zh.md)
+[![English | 中文](https://img.shields.io/badge/dsh--task--worktree-English%20%7C%20%E4%B8%AD%E6%96%87-0075cc?style=flat&labelColor=555555)](https://github.com/Letter2025/dsh-task-worktree)
 
 **Complete Git worktree support for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).**
 
