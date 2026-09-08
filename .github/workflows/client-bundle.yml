@@ -16,22 +16,19 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 11.22.0
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
+          cache: npm
 
+      # The package migrated from pnpm to npm (0.1.2-rc.1 devDependencies);
+      # install exactly the committed lockfile.
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Build client bundle
-        run: pnpm run build:client
+        run: npm run build:client
 
       - name: Verify committed client bundle
         run: git diff --exit-code -- client
