@@ -8,7 +8,7 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
-import type { SessionFace } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SessionFace } from '@deepseek-ai/dsh-api-session-controller/client'
 import {
   IconBranchOutline16,
   IconChevronDownOutline14,

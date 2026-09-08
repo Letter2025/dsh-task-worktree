@@ -34,6 +34,18 @@ const en = {
 
 //#endregion
 //#region src/client/worktreeLedger.ts
+/**
+* Client-side worktree recognition helpers.
+*
+* The plugin no longer registers a workspace per worktree (that cluttered the
+* sidebar); each conversation is *labelled* instead. The label comes from the
+* worktree declaration store (armed via start-in-worktree-mode) or from the
+* session cwd when it runs inside a managed checkout.
+*
+* dsh 0.1.2 note: the transcript-scanning helper (`worktreeNameOfSnapshot`)
+* was removed — `@deepseek-ai/dsh-client-runtime` and its ConversationNode
+* model no longer exist; the badge derives the label from the store plus cwd.
+*/
 /** Registry path marker: <root>/.dsh-worktrees/worktree/<name...>. */
 const WORKTREE_PATH$1 = /[\\/]\.dsh-worktrees[\\/]worktree[\\/](.+)$/u;
 /**
@@ -492,7 +504,8 @@ function apply(ctx) {
 		const marker = /[\\/]\.dsh-worktrees[\\/]worktree[\\/]/u.exec(cwd);
 		const localPath = marker !== null ? cwd.slice(0, marker.index) : cwd;
 		const workspace = await ctx.workspaces.create({ path: localPath });
-		ctx.workspaces.startSession(workspace.workspaceId);
+		const sessionId = await ctx.sessions.create({ workspaceId: workspace.workspaceId });
+		ctx.sessions.open(sessionId);
 	};
 	/**
 	* Arm this conversation for worktree mode: the host injects the creation

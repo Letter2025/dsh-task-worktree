@@ -20,12 +20,12 @@
  * entries.
  */
 import { createElement as h } from 'react'
-import type {
-  ISessions,
-  IWorkspaces,
-  SessionFace,
-  SessionId,
-} from '@deepseek-ai/dsh-client-runtime/client'
+// dsh 0.1.2 removed `@deepseek-ai/dsh-client-runtime`; the browser faces now
+// live on the API-controller/client packages (type-only imports — erased from
+// the tsdown bundle, so nothing here needs a module-table entry).
+import type { ISessions, SessionFace } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { IWorkspaces } from '@deepseek-ai/dsh-api-workspace-controller/client'
+import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import { en, zh } from './locales.ts'
 import { WorktreeBadge } from './WorktreeBadge.tsx'
 import { WorktreePanel } from './WorktreePanel.tsx'
@@ -98,7 +98,10 @@ export function apply(ctx: WorktreeClientContext): void {
     const marker = /[\\/]\.dsh-worktrees[\\/]worktree[\\/]/u.exec(cwd)
     const localPath = marker !== null ? cwd.slice(0, marker.index) : cwd
     const workspace = await ctx.workspaces.create({ path: localPath })
-    ctx.workspaces.startSession(workspace.workspaceId)
+    // dsh 0.1.2 dropped IWorkspaces.startSession: create + open the session
+    // through the sessions service instead.
+    const sessionId = await ctx.sessions.create({ workspaceId: workspace.workspaceId })
+    ctx.sessions.open(sessionId)
   }
 
   /**
