@@ -1,0 +1,132 @@
+/* Only the chrome the host does not hand out.
+   The host exports no reusable settings card (`ui-settings-plugins` exports
+   `apply`/`inject` plus types only) and its own packages already duplicate
+   these row/card rules across package boundaries, so a card that lives in the
+   Plugins section is drawn by its owner. Values below are taken from:
+   - card chrome/header/body: ui-settings-plugins PluginCard.module.css
+   - field/label/hint:        ui-settings-plugins fields.module.css
+   The control itself is the host `Button` + `Menu` primitives — no styles. */
+
+.card {
+  border: 0.5px solid var(--dsw-alias-border-l4, rgba(255, 255, 255, 0.14));
+  background: var(--dsw-alias-bg-layer-3, #26262b);
+  border-radius: 16px;
+  list-style: none;
+  transition: border-color 0.16s, background 0.16s;
+}
+
+.card:hover {
+  border-color: var(--dsw-alias-label-dimmed, rgba(255, 255, 255, 0.34));
+}
+
+.cardOpen {
+  background: var(--dsw-alias-bg-layer-2, #1f1f24);
+  border-color: var(--dsw-alias-label-dimmed, rgba(255, 255, 255, 0.34));
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  appearance: none;
+  background: 0 0;
+  border: 0;
+  border-radius: 12px;
+}
+
+.header:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary, #4f73ff);
+  outline-offset: -2px;
+}
+
+.headText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.name {
+  color: var(--dsw-alias-label-primary, #fff);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.description {
+  color: var(--dsw-alias-label-tertiary, #8a8f98);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.chevron {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary, #8a8f98);
+  transition: transform 0.16s;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.body {
+  margin: 0 16px;
+  padding-bottom: 8px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.08));
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 0;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.label {
+  flex: 1;
+  min-width: 0;
+  color: var(--dsw-alias-label-primary, #fff);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.controlIcon {
+  flex: none;
+}
+
+.hint {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary, #8a8f98);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* PluginCard.module.css `.readOnly` / `.failed`. */
+.readOnly,
+.failed {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.readOnly {
+  color: var(--dsw-alias-label-tertiary, #8a8f98);
+}
+
+.failed {
+  color: var(--dsw-alias-label-error, #e06c6c);
+}
