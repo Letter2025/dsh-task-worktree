@@ -4,6 +4,10 @@
  * Selecting Worktree mode in the mode dropdown arms the host immediately
  * (`/worktree mode-on`); the store mirrors that with the optional declared
  * name. Slot components read it through useSyncExternalStore.
+ *
+ * `explicit` records that the user answered for THIS conversation (worktree or
+ * local). It is what keeps a configured default from overriding a deliberate
+ * local choice: without it, "local" and "not decided yet" would look alike.
  */
 /** State the components need for the current session. */
 export interface WorktreeSessionState {
@@ -11,6 +15,8 @@ export interface WorktreeSessionState {
   name: string | undefined
   /** Worktree mode selected/armed (badge + strip on). */
   worktree: boolean
+  /** The user chose a mode for this conversation (either one). */
+  explicit: boolean
 }
 
 /** Plain observable store keyed by session id. */
@@ -20,8 +26,11 @@ export interface WorktreeStore {
   stateOf(sessionId: string | undefined): WorktreeSessionState
   /** Arm the host: worktree mode + optional name. */
   declare(sessionId: string | undefined, name: string | undefined): void
+  /** Record a deliberate local choice for this conversation. */
   clear(sessionId: string | undefined): void
 }
+
+const UNDECIDED: WorktreeSessionState = { name: undefined, worktree: false, explicit: false }
 
 export function createWorktreeStore(): WorktreeStore {
   let byId = new Map<string, WorktreeSessionState>()
@@ -43,23 +52,24 @@ export function createWorktreeStore(): WorktreeStore {
       return version
     },
     stateOf(sessionId) {
-      if (sessionId === undefined) return { name: undefined, worktree: false }
-      return byId.get(sessionId) ?? { name: undefined, worktree: false }
+      if (sessionId === undefined) return UNDECIDED
+      return byId.get(sessionId) ?? UNDECIDED
     },
     declare(sessionId, name) {
       if (sessionId === undefined) return
       const current = byId.get(sessionId)
-      const next = { name: name ?? undefined, worktree: true }
-      if (current !== undefined && current.name === next.name && current.worktree === next.worktree) return
+      const next = { name: name ?? undefined, worktree: true, explicit: true }
+      if (current !== undefined && current.name === next.name && current.worktree && current.explicit) return
       const cloned = new Map(byId)
       cloned.set(sessionId, next)
       bump(cloned)
     },
     clear(sessionId) {
       if (sessionId === undefined) return
-      if (!byId.has(sessionId)) return
+      const current = byId.get(sessionId)
+      if (current !== undefined && !current.worktree && current.explicit) return
       const cloned = new Map(byId)
-      cloned.delete(sessionId)
+      cloned.set(sessionId, { name: undefined, worktree: false, explicit: true })
       bump(cloned)
     },
   }

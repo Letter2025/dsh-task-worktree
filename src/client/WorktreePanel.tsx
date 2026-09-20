@@ -5,6 +5,13 @@
  * next user message); the revealed strip optionally takes a name (Enter to
  * apply). Selecting Local mode disarms. Management commands (/worktree
  * list/status/...) stay available from the composer directly.
+ *
+ * On a blank conversation the selector reflects the configured default mode
+ * (`task-worktree` settings namespace): with the default set to worktree the
+ * strip is pre-armed and the host injects the creation instruction with the
+ * first message. Picking a mode is always an explicit answer for THIS
+ * conversation, and — when "remember the last choice" is on — it also updates
+ * the default.
  */
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
@@ -15,6 +22,7 @@ import {
   IconFolderOpenOutline16,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { WorktreeKey } from './locales.ts'
+import type { WorktreePrefsStore } from './worktreePrefs.ts'
 import type { WorktreeStore } from './worktreeStore.ts'
 import css from './WorktreePanel.module.css'
 
@@ -28,6 +36,8 @@ declare global {
       mode: string
       hero: boolean
       declaredWorktree: boolean
+      defaultMode: string
+      explicit: boolean
     }
   }
 }
@@ -53,6 +63,8 @@ export interface WorktreePanelProps extends WorktreePanelInjected {
   t: (key: keyof WorktreeKey) => string
   /** The declared-worktree store. */
   store: WorktreeStore
+  /** The durable preferences store (default mode + last-choice memory). */
+  prefs: WorktreePrefsStore
   /** Resolve the staged session id. */
   sessionIdOf(): string | undefined
 }
@@ -73,13 +85,18 @@ export function WorktreePanel(props: WorktreePanelProps): ReactNode {
   /** Last raw name actually sent to the host (dedup guard for re-arms). */
   const lastAppliedRef = useRef<string>('')
   useSyncExternalStore(store.subscribe, store.getVersion)
+  const prefs = useSyncExternalStore(props.prefs.subscribe, props.prefs.getSnapshot)
   const sessionId = sessionIdOf()
   const declared = store.stateOf(sessionId)
   // Blank-hero bit still tracked for layout/debugging; the strip itself is
   // driven purely by the mode dropdown selection.
   const hero = props.currentBlank()
-  // A conversation declared (or runs inside) a worktree shows worktree mode.
-  const mode = declared.worktree || currentMode(props) === 'worktree' ? 'worktree' : 'local'
+  // The configured default governs a blank conversation the user has not
+  // answered for yet; the host arms it when the first message arrives.
+  const defaultWorktree = hero && !declared.explicit && prefs.defaultMode === 'worktree'
+  const preArmed = defaultWorktree && !declared.worktree
+  // A conversation declared (or running inside) a worktree shows worktree mode.
+  const mode = declared.worktree || defaultWorktree || currentMode(props) === 'worktree' ? 'worktree' : 'local'
 
   // Keep the name input in sync with the committed worktree name.
   useEffect(() => {
@@ -96,6 +113,8 @@ export function WorktreePanel(props: WorktreePanelProps): ReactNode {
     mode,
     hero,
     declaredWorktree: declared.worktree,
+    defaultMode: prefs.defaultMode,
+    explicit: declared.explicit,
   }
 
   useLayoutEffect(() => {
@@ -155,6 +174,11 @@ export function WorktreePanel(props: WorktreePanelProps): ReactNode {
     window.setTimeout(() => setNotice(null), 1800)
   }
 
+  /** Persist a mode the user picked as the default for future conversations. */
+  const remember = (choice: 'local' | 'worktree'): void => {
+    if (prefs.rememberLastChoice) void props.prefs.setDefaultMode(choice)
+  }
+
   /** Legacy: leave a session actually running inside a worktree checkout. */
   const switchLocal = (): void => {
     if (busy !== null) return
@@ -179,7 +203,10 @@ export function WorktreePanel(props: WorktreePanelProps): ReactNode {
   /** 本地模式 radio: disarm the declared worktree mode, or leave a legacy checkout session. */
   const selectLocal = (): void => {
     if (busy !== null) return
-    if (declared.worktree) {
+    if (declared.worktree || preArmed) {
+      // An explicit local answer for this conversation: disarm the host, which
+      // also suppresses the configured default for it.
+      remember('local')
       disarmMode()
       closeMenu()
       return
@@ -250,7 +277,7 @@ export function WorktreePanel(props: WorktreePanelProps): ReactNode {
         />
       </button>
 
-      {declared.worktree && (
+      {(declared.worktree || preArmed) && (
         <div className={css.heroStart} data-testid="worktree-mode-start">
           <IconBranchOutline16 size={14} className={css.icon} />
           <span className={css.heroStartLabel}>{t('heroStartLabel')}</span>
@@ -287,7 +314,9 @@ export function WorktreePanel(props: WorktreePanelProps): ReactNode {
             onClick={() => {
               // Selecting worktree mode arms the host immediately (the
               // creation instruction rides the next message); the strip
-              // lets you set a name with Enter.
+              // lets you set a name with Enter. It is also an explicit
+              // answer, so it can be remembered as the new default.
+              remember('worktree')
               if (!declared.worktree) {
                 void props.armWorktreeMode(undefined).catch(() => showFailure())
               }

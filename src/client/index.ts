@@ -30,6 +30,9 @@ import { en, zh } from './locales.ts'
 import { WorktreeBadge } from './WorktreeBadge.tsx'
 import { WorktreePanel } from './WorktreePanel.tsx'
 import { createWorktreeStore } from './worktreeStore.ts'
+import { createPrefsStore, SETTINGS_NS } from './worktreePrefs.ts'
+import type { SettingsScopeBinder } from './worktreePrefs.ts'
+import { WorktreeSettingsCard } from './WorktreeSettingsCard.tsx'
 
 const NS = 'dsh-task-worktree'
 
@@ -53,6 +56,8 @@ interface WorktreeClientContext {
   slots: SlotsService
   sessions: ISessions
   workspaces: IWorkspaces
+  /** Nested service injection (used to stay mounted on hosts without settings). */
+  inject(services: string[], callback: (scoped: WorktreeClientContext & { settingsScope: SettingsScopeBinder }) => void): void
 }
 
 export const name = 'dsh-task-worktree'
@@ -65,6 +70,24 @@ export function apply(ctx: WorktreeClientContext): void {
 
   /** Reactive store for worktree-mode declarations. */
   const store = createWorktreeStore()
+
+  /** Durable preferences: default mode for new conversations + last-choice memory. */
+  const prefs = createPrefsStore()
+
+  // The settings card and the scope that feeds it are registered through a
+  // NESTED inject: naming `settingsScope` in the module-level `inject` would
+  // keep this whole plugin unmounted on a host without the settings domain,
+  // losing the composer selector to gain a card such a host cannot render.
+  ctx.inject(['settingsScope'], (scoped) => {
+    scoped.effect(() => prefs.bind(scoped.settingsScope), `${NS}: settings scope`)
+    scoped.slots.inject('settings.plugin.item', () => scoped.slots.register({
+      name: 'settings.plugin.item',
+      // Keyed by the SETTINGS NAMESPACE: the Plugins page dispatches one card
+      // per namespace the host serves, so this must match lib/index.js.
+      key: SETTINGS_NS,
+      locale: NS,
+    }, () => h(WorktreeSettingsCard, { prefs, t })))
+  })
 
   /** Resolve the current session face through the current selection id. */
   const currentSession = (): SessionFace | undefined => {
@@ -148,6 +171,7 @@ export function apply(ctx: WorktreeClientContext): void {
     armWorktreeMode,
     disarmWorktreeMode,
     store,
+    prefs,
     sessionIdOf: currentSessionId,
     t,
   })))
