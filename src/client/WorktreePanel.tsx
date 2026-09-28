@@ -10,9 +10,11 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } fr
 import type { ReactNode } from 'react'
 import type { SessionFace } from '@deepseek-ai/dsh-api-session-controller/client'
 import {
-  IconBranchOutline16,
-  IconChevronDownOutline14,
-  IconFolderOpenOutline16,
+  // dsh-client-ui-primitives 0.1.7 renamed the icon sizes: Regular (1px
+  // stroke) replaces the numbered 14/16 artwork words.
+  IconBranchOutlineRegular,
+  IconChevronDownOutlineRegular,
+  IconFolderOpenOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { WorktreeKey } from './locales.ts'
 import type { WorktreeStore } from './worktreeStore.ts'
@@ -241,10 +243,10 @@ export function WorktreePanel(props: WorktreePanelProps): ReactNode {
         onClick={toggleMenu}
       >
         {mode === 'worktree'
-          ? <IconBranchOutline16 size={14} className={css.icon} />
-          : <IconFolderOpenOutline16 size={14} className={css.icon} />}
+          ? <IconBranchOutlineRegular size={14} className={css.icon} />
+          : <IconFolderOpenOutlineRegular size={14} className={css.icon} />}
         <span>{mode === 'worktree' ? t('worktreeMode') : t('localMode')}</span>
-        <IconChevronDownOutline14
+        <IconChevronDownOutlineRegular
           size={12}
           className={`${css.chevron} ${open ? css.chevronOpen : ''}`}
         />
@@ -252,7 +254,7 @@ export function WorktreePanel(props: WorktreePanelProps): ReactNode {
 
       {declared.worktree && (
         <div className={css.heroStart} data-testid="worktree-mode-start">
-          <IconBranchOutline16 size={14} className={css.icon} />
+          <IconBranchOutlineRegular size={14} className={css.icon} />
           <span className={css.heroStartLabel}>{t('heroStartLabel')}</span>
           <input
             className={css.heroStartInput}
@@ -275,7 +277,7 @@ export function WorktreePanel(props: WorktreePanelProps): ReactNode {
             disabled={busy !== null}
             onClick={selectLocal}
           >
-            <IconFolderOpenOutline16 size={14} className={css.icon} />
+            <IconFolderOpenOutlineRegular size={14} className={css.icon} />
             <span>{busy === 'local' ? t('switching') : t('localMode')}</span>
           </button>
           <button
@@ -294,7 +296,7 @@ export function WorktreePanel(props: WorktreePanelProps): ReactNode {
               closeMenu()
             }}
           >
-            <IconBranchOutline16 size={14} className={css.icon} />
+            <IconBranchOutlineRegular size={14} className={css.icon} />
             <span>{t('worktreeMode')}</span>
           </button>
         </div>

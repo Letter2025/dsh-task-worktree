@@ -133,7 +133,7 @@ function WorktreeBadge(props) {
 		title: `${t("badgeTooltip")}: ${name$1}`,
 		"data-testid": "worktree-badge",
 		"data-worktree": name$1,
-		children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(__deepseek_ai_dsh_client_ui_primitives.IconBranchOutline16, {
+		children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(__deepseek_ai_dsh_client_ui_primitives.IconBranchOutlineRegular, {
 			size: 13,
 			className: WorktreePanel_module_css_default.badgeIcon
 		}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: name$1 })]
@@ -313,15 +313,15 @@ function WorktreePanel(props) {
 				"aria-expanded": open,
 				onClick: toggleMenu,
 				children: [
-					mode === "worktree" ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(__deepseek_ai_dsh_client_ui_primitives.IconBranchOutline16, {
+					mode === "worktree" ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(__deepseek_ai_dsh_client_ui_primitives.IconBranchOutlineRegular, {
 						size: 14,
 						className: WorktreePanel_module_css_default.icon
-					}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(__deepseek_ai_dsh_client_ui_primitives.IconFolderOpenOutline16, {
+					}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(__deepseek_ai_dsh_client_ui_primitives.IconFolderOpenOutlineRegular, {
 						size: 14,
 						className: WorktreePanel_module_css_default.icon
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: mode === "worktree" ? t("worktreeMode") : t("localMode") }),
-					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(__deepseek_ai_dsh_client_ui_primitives.IconChevronDownOutline14, {
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(__deepseek_ai_dsh_client_ui_primitives.IconChevronDownOutlineRegular, {
 						size: 12,
 						className: `${WorktreePanel_module_css_default.chevron} ${open ? WorktreePanel_module_css_default.chevronOpen : ""}`
 					})
@@ -331,7 +331,7 @@ function WorktreePanel(props) {
 				className: WorktreePanel_module_css_default.heroStart,
 				"data-testid": "worktree-mode-start",
 				children: [
-					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(__deepseek_ai_dsh_client_ui_primitives.IconBranchOutline16, {
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(__deepseek_ai_dsh_client_ui_primitives.IconBranchOutlineRegular, {
 						size: 14,
 						className: WorktreePanel_module_css_default.icon
 					}),
@@ -360,7 +360,7 @@ function WorktreePanel(props) {
 					className: `${WorktreePanel_module_css_default.menuItem} ${mode === "local" ? WorktreePanel_module_css_default.selected : ""}`,
 					disabled: busy !== null,
 					onClick: selectLocal,
-					children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(__deepseek_ai_dsh_client_ui_primitives.IconFolderOpenOutline16, {
+					children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(__deepseek_ai_dsh_client_ui_primitives.IconFolderOpenOutlineRegular, {
 						size: 14,
 						className: WorktreePanel_module_css_default.icon
 					}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: busy === "local" ? t("switching") : t("localMode") })]
@@ -374,7 +374,7 @@ function WorktreePanel(props) {
 						if (!declared.worktree) props.armWorktreeMode(void 0).catch(() => showFailure());
 						closeMenu();
 					},
-					children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(__deepseek_ai_dsh_client_ui_primitives.IconBranchOutline16, {
+					children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(__deepseek_ai_dsh_client_ui_primitives.IconBranchOutlineRegular, {
 						size: 14,
 						className: WorktreePanel_module_css_default.icon
 					}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: t("worktreeMode") })]
@@ -504,8 +504,7 @@ function apply(ctx) {
 		const marker = /[\\/]\.dsh-worktrees[\\/]worktree[\\/]/u.exec(cwd);
 		const localPath = marker !== null ? cwd.slice(0, marker.index) : cwd;
 		const workspace = await ctx.workspaces.create({ path: localPath });
-		const sessionId = await ctx.sessions.create({ workspaceId: workspace.workspaceId });
-		ctx.sessions.open(sessionId);
+		await ctx.sessions.create({ workspaceId: workspace.workspaceId });
 	};
 	/**
 	* Arm this conversation for worktree mode: the host injects the creation

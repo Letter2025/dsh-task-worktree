@@ -97,11 +97,12 @@ export function apply(ctx: WorktreeClientContext): void {
     }
     const marker = /[\\/]\.dsh-worktrees[\\/]worktree[\\/]/u.exec(cwd)
     const localPath = marker !== null ? cwd.slice(0, marker.index) : cwd
+    // dsh 0.1.7: client-owned current-session selection moved to the view
+    // owners; `ISessions.open` is gone. The capability keeps its guarantees:
+    // the host registers (or adopts) the workspace and catalogues a session
+    // inside it — the new session then appears in the session list.
     const workspace = await ctx.workspaces.create({ path: localPath })
-    // dsh 0.1.2 dropped IWorkspaces.startSession: create + open the session
-    // through the sessions service instead.
-    const sessionId = await ctx.sessions.create({ workspaceId: workspace.workspaceId })
-    ctx.sessions.open(sessionId)
+    await ctx.sessions.create({ workspaceId: workspace.workspaceId })
   }
 
   /**

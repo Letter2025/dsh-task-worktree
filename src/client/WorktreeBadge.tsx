@@ -6,7 +6,7 @@
  */
 import { useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
-import { IconBranchOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconBranchOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { worktreeNameOfCwd } from './worktreeLedger.ts'
 import type { WorktreeStore } from './worktreeStore.ts'
 import css from './WorktreePanel.module.css'
@@ -65,7 +65,7 @@ export function WorktreeBadge(props: WorktreeBadgeProps): ReactNode {
       data-testid="worktree-badge"
       data-worktree={name}
     >
-      <IconBranchOutline16 size={13} className={css.badgeIcon} />
+      <IconBranchOutlineRegular size={13} className={css.badgeIcon} />
       <span>{name}</span>
     </div>
   )
